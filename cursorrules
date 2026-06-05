@@ -1,0 +1,52 @@
+# .cursorrules — Semantic BI MCP
+
+## Project
+Portfolio-grade MCP server demonstrating a SAFE, CORRECT "talk to your data" capability for AI assistants. Audience is technical clients (founders, CTOs) who read the code on GitHub. Code quality IS the product. Read CURSOR.md before generating anything.
+
+## The non-negotiable principle
+This server exposes a SEMANTIC LAYER, never a raw SQL runner. Every business metric is defined once as vetted SQL in `lib/metrics.ts` and surfaced as an MCP tool. The model assembles answers from correct, pre-defined building blocks — it does NOT improvise SQL against real tables.
+- NEVER add a tool that executes arbitrary model-generated SQL against base tables.
+- NEVER add a code path that can mutate, insert, update, or delete dataset data.
+- The ONLY write in the system is appending to the in-memory audit log.
+If a requested change violates these, stop and flag it instead of implementing it.
+
+## Stack (pinned — do not "upgrade" without being asked)
+- Next.js App Router + TypeScript + Tailwind, Node 20+.
+- MCP: `mcp-handler` + `@modelcontextprotocol/sdk@^1.26` (the CLASSIC sdk, NOT @modelcontextprotocol/server / /client split packages — those are not stable until Jul 28 2026).
+- `zod@^3.25` only. Do not introduce zod v4.
+- Data: `sql.js` (WASM SQLite). No native DB drivers, no Postgres, no better-sqlite3 — must stay serverless-safe.
+- Agent: `@langchain/mcp-adapters` (`MultiServerMCPClient`, `transport: "streamableHttp"`) + `@langchain/langgraph` (`createReactAgent`) + `@langchain/core` + `@langchain/openai`.
+- Model: `gpt-4o-mini`, `temperature: 0`. Do not swap models.
+- Deploy: Vercel (Pro, Fluid compute). Keep the MCP server STATELESS — no SSE, no Redis.
+
+## Architecture rules
+- One Next.js app. MCP server at `app/api/[transport]/route.ts` (endpoint `/api/mcp`). Agent at `app/api/chat/route.ts`. UI at `app/page.tsx` + `components/`.
+- ALL data + business logic lives in `lib/`. Route handlers contain wiring only — no SQL, no metric math in routes.
+- Each metric = a named, documented SQL builder in `lib/metrics.ts`. Adding a metric means adding it there and registering a tool. Never inline metric SQL inside a tool definition.
+- The LangChain agent connects to the MCP server over HTTP via its URL — NEVER import tool functions in-process. The network hop is the point of the demo.
+
+## MCP design rules
+- Implement all three primitives: tools, resources, prompts. Don't ship tools only.
+- Every tool/resource/prompt MUST have a clear, human-quality description string. These are judged by clients.
+- Tool inputs use TIGHT zod schemas: enums over free-text, min/max on numbers, required fields, no `z.any()`. Fuzzy schemas degrade tool-calling quality.
+- `safe_query`: accept ONLY a single read-only SELECT against whitelisted views; enforce a row cap and timeout; return the exact SQL that ran. Reject everything else with a clear error.
+- Guardrails are first-class: read-only by construction, row caps, query timeouts, PII masking by default, audit-log every call. Treat these as features, not chores.
+- Auth: a Bearer API-key check wrapping the handler (`lib/auth.ts`). Do not build OAuth.
+
+## Code style
+- TypeScript strict. Small, clearly named functions. Explicit types on exported functions.
+- Comment the MCP wiring and the guardrail logic; skip comments on the obvious.
+- No dead code, no commented-out blocks left behind.
+- Deterministic seed data — same dataset every run.
+
+## Documentation discipline (required)
+Whenever you change security posture, features, tech stack, MCP tools/resources/prompts, environment variables, or deployment steps, you MUST update the relevant docs in the same change:
+- **README.md** — project overview, architecture, capability tables, quick-start pointers.
+- **SECURITY.md** — security audit status, threat model, findings, mitigations.
+- **INSTALLATION.md** — setup steps and env var sources.
+Do not ship code changes that affect these areas without updating the corresponding docs.
+
+## Discipline
+- Build in the phase order from CURSOR.md. Do NOT build the agent or UI until the MCP Inspector is green on every tool, resource, and prompt.
+- When unsure about an MCP SDK or mcp-handler API detail, say so and propose verifying against docs — do not invent method signatures.
+- This is a weekend demo, not a product. Resist scope creep: no multi-tenant auth flows, no real database, no dashboards. Suggest cutting before extending.
