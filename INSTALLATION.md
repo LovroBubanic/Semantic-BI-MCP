@@ -188,14 +188,15 @@ Add the `Authorization: Bearer <MCP_API_KEY>` header. The key must match exactly
 ### Agent can't reach MCP server
 Ensure `MCP_URL` points to a running server. For local dev, start `npm run dev` first. The agent connects over HTTP — it does not import tools in-process.
 
-### Chat returns `No authorization provided` on Vercel
-This usually means the `Authorization` header was stripped before reaching `/api/mcp`.
+### Chat returns authentication errors on Vercel
+The chat UI runs MCP **in-process** (no HTTP loopback), so chat should work even when Vercel Deployment Protection is enabled.
 
-1. Set `MCP_URL` to **`https://`** (not `http://`) with **no trailing slash**, e.g. `https://your-domain.com/api/mcp`
-2. Ensure `MCP_API_KEY` is set for the **Production** environment in Vercel
-3. **Redeploy** after changing environment variables
+If **external** clients (Cursor, MCP Inspector) fail against a protected preview URL:
 
-On Vercel, the chat agent automatically uses the deployment's internal HTTPS URL (`VERCEL_URL`) when `MCP_URL` points to the same app, avoiding `http→https` redirects that drop Bearer tokens.
+1. Set `MCP_URL` to your **custom domain** with **`https://`**, e.g. `https://your-domain.com/api/mcp`
+2. Or disable **Deployment Protection** for the environment you're testing (Vercel → Project → Settings → Deployment Protection)
+3. Or enable **Protection Bypass for Automation** in Vercel and add the generated `VERCEL_AUTOMATION_BYPASS_SECRET` to your MCP client headers as `x-vercel-protection-bypass`
+4. Ensure `MCP_API_KEY` is set for **Production** and **redeploy** after env changes
 
 ### sql.js WASM not found on Vercel
 The app resolves WASM from `node_modules/sql.js/dist/sql-wasm.wasm`. `next.config.ts` marks `sql.js` as a server external package. If issues persist, verify the file exists in your deployment bundle.

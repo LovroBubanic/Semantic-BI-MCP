@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { getMcpAuthHeaders, getMcpApiKey, resolveChatMcpUrl } from "@/lib/mcp-config";
+import { getMcpApiKey } from "@/lib/mcp-config";
+import { createInProcessMcpSession } from "@/lib/mcp-inprocess";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -52,30 +53,19 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       const [
-        { MultiServerMCPClient },
         { ChatOpenAI },
         { createReactAgent },
         { HumanMessage, AIMessage },
       ] = await Promise.all([
-        import("@langchain/mcp-adapters"),
         import("@langchain/openai"),
         import("@langchain/langgraph/prebuilt"),
         import("@langchain/core/messages"),
       ]);
 
-      const client = new MultiServerMCPClient({
-        mcpServers: {
-          "semantic-bi": {
-            url: resolveChatMcpUrl(),
-            transport: "http",
-            headers: getMcpAuthHeaders(),
-            automaticSSEFallback: false,
-          },
-        },
-      });
+      const mcpSession = await createInProcessMcpSession();
 
       try {
-        const tools = await client.getTools();
+        const tools = mcpSession.tools;
         const model = new ChatOpenAI({
           model: "gpt-4o-mini",
           temperature: 0,
@@ -159,7 +149,7 @@ export async function POST(req: NextRequest) {
         );
       } finally {
         try {
-          await client.close();
+          await mcpSession.close();
         } catch {
           /* ignore close errors */
         }

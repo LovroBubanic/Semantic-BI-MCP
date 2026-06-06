@@ -5,11 +5,6 @@ function stripUrlHost(value: string): string {
   return value.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
-function hostsMatch(a: string, b: string): boolean {
-  const normalize = (host: string) => host.toLowerCase().replace(/^www\./, "");
-  return normalize(a) === normalize(b);
-}
-
 /**
  * Normalize MCP URL: trim, fix duplicate slashes, enforce /api/mcp path,
  * and upgrade http→https for non-local production hosts.
@@ -39,54 +34,22 @@ export function normalizeMcpUrl(raw: string): string {
   }
 }
 
-function isSameDeployment(configuredUrl: string): boolean {
-  const vercelHost = process.env.VERCEL_URL
-    ? stripUrlHost(process.env.VERCEL_URL)
-    : undefined;
-  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? stripUrlHost(process.env.VERCEL_PROJECT_PRODUCTION_URL)
-    : undefined;
-
-  if (!vercelHost) {
-    return true;
-  }
-
-  try {
-    const configuredHost = new URL(normalizeMcpUrl(configuredUrl)).host;
-    if (hostsMatch(configuredHost, vercelHost)) {
-      return true;
-    }
-    if (productionHost && hostsMatch(configuredHost, productionHost)) {
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-function getVercelInternalMcpUrl(): string | undefined {
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (!vercelUrl) {
-    return undefined;
-  }
-  return `https://${stripUrlHost(vercelUrl)}${MCP_ENDPOINT_PATH}`;
-}
-
 /**
- * URL the chat agent uses to reach the MCP server.
- * On Vercel, prefers the deployment's canonical HTTPS URL for same-app calls
- * so Authorization headers are not stripped by http→https redirects.
+ * Public MCP endpoint URL for external clients (Cursor, MCP Inspector).
+ * Never uses VERCEL_URL — preview deployment URLs are behind Vercel SSO.
  */
-export function resolveChatMcpUrl(): string {
+export function resolveMcpUrl(): string {
   const configured = process.env.MCP_URL?.trim();
-  const internalUrl = getVercelInternalMcpUrl();
-
-  if (internalUrl && (!configured || isSameDeployment(configured))) {
-    return internalUrl;
+  if (configured) {
+    return normalizeMcpUrl(configured);
   }
 
-  return normalizeMcpUrl(configured ?? LOCAL_MCP_URL);
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (productionHost) {
+    return `https://${stripUrlHost(productionHost)}${MCP_ENDPOINT_PATH}`;
+  }
+
+  return LOCAL_MCP_URL;
 }
 
 export function getMcpApiKey(): string {
@@ -98,7 +61,14 @@ export function getMcpApiKey(): string {
 }
 
 export function getMcpAuthHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${getMcpApiKey()}`,
   };
+
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+  if (bypass) {
+    headers["x-vercel-protection-bypass"] = bypass;
+  }
+
+  return headers;
 }
