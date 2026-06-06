@@ -109,7 +109,11 @@ export default function HomePage() {
                     ...m,
                     toolCalls: (m.toolCalls ?? []).map((tc) =>
                       tc.id === event.id
-                        ? { ...tc, result: event.result, status: "done" as const }
+                        ? {
+                            ...tc,
+                            result: event.result,
+                            status: event.status === "error" ? ("error" as const) : ("done" as const),
+                          }
                         : tc
                     ),
                   };
@@ -224,6 +228,6 @@ export default function HomePage() {
 type StreamEvent =
   | { type: "token"; text: string }
   | { type: "tool_start"; id: string; name: string; args: Record<string, unknown> }
-  | { type: "tool_end"; id: string; result: string }
+  | { type: "tool_end"; id: string; result: string; status?: "done" | "error" }
   | { type: "error"; message: string }
   | { type: "done" };

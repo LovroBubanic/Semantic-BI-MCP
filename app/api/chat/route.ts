@@ -117,23 +117,38 @@ export async function POST(req: NextRequest) {
             );
           }
 
-          if (event.event === "on_tool_end") {
+          if (event.event === "on_tool_end" || event.event === "on_tool_error") {
             const runId = String(event.run_id ?? "");
             const id = toolIdMap.get(runId) ?? crypto.randomUUID();
-            const output = event.data?.output;
             let resultStr: string;
-            if (typeof output === "string") {
-              resultStr = output;
-            } else if (output && typeof output === "object") {
-              resultStr = JSON.stringify(output, null, 2);
+            let status: "done" | "error" = "done";
+
+            if (event.event === "on_tool_error") {
+              const err: unknown = event.data?.error;
+              resultStr =
+                err instanceof Error
+                  ? err.message
+                  : typeof err === "string"
+                    ? err
+                    : JSON.stringify(err ?? { error: "Tool failed" }, null, 2);
+              status = "error";
             } else {
-              resultStr = JSON.stringify(output ?? {}, null, 2);
+              const output = event.data?.output;
+              if (typeof output === "string") {
+                resultStr = output;
+              } else if (output && typeof output === "object") {
+                resultStr = JSON.stringify(output, null, 2);
+              } else {
+                resultStr = JSON.stringify(output ?? {}, null, 2);
+              }
             }
+
             controller.enqueue(
               encodeEvent({
                 type: "tool_end",
                 id,
                 result: resultStr,
+                status,
               })
             );
           }

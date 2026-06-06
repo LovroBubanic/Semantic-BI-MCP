@@ -1,4 +1,5 @@
 import initSqlJs, { Database, SqlJsStatic, type SqlValue } from "sql.js";
+import { createRequire } from "module";
 import path from "path";
 import fs from "fs";
 import { seedDatabase } from "./seed";
@@ -6,14 +7,43 @@ import { seedDatabase } from "./seed";
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 let dbInstance: Database | null = null;
 
-function getWasmPath(): string {
-  return path.join(process.cwd(), "node_modules", "sql.js", "dist", "sql-wasm.wasm");
+const require = createRequire(import.meta.url);
+
+function resolveWasmPath(): string {
+  const candidates = [
+    path.join(process.cwd(), "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+  ];
+
+  try {
+    const sqlEntry = require.resolve("sql.js");
+    candidates.push(path.join(path.dirname(sqlEntry), "sql-wasm.wasm"));
+  } catch {
+    /* package not resolvable in this runtime */
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
+}
+
+function loadWasmBinary(): Buffer {
+  const wasmPath = resolveWasmPath();
+  if (!fs.existsSync(wasmPath)) {
+    throw new Error(
+      `sql.js WASM not found at ${wasmPath}. Ensure sql.js is installed and included in the deployment bundle.`
+    );
+  }
+  return fs.readFileSync(wasmPath);
 }
 
 async function getSql(): Promise<SqlJsStatic> {
   if (!sqlPromise) {
     sqlPromise = initSqlJs({
-      locateFile: () => getWasmPath(),
+      wasmBinary: loadWasmBinary().buffer as ArrayBuffer,
     });
   }
   return sqlPromise;
@@ -70,7 +100,7 @@ export function resetDbForTests(): void {
 }
 
 export function getDbFileInfo(): { wasmExists: boolean; wasmPath: string } {
-  const wasmPath = getWasmPath();
+  const wasmPath = resolveWasmPath();
   return {
     wasmPath,
     wasmExists: fs.existsSync(wasmPath),
