@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getMcpAuthHeaders, getMcpApiKey, resolveChatMcpUrl } from "@/lib/mcp-config";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -13,18 +14,6 @@ CRITICAL RULES:
 - When using safe_query, only SELECT from whitelisted views.
 - Present numbers clearly with units (USD for revenue, % for rates).
 - If a question cannot be answered with available tools, say so clearly.`;
-
-function getMcpUrl(): string {
-  return process.env.MCP_URL ?? "http://localhost:3000/api/mcp";
-}
-
-function getMcpApiKey(): string {
-  const key = process.env.MCP_API_KEY;
-  if (!key) {
-    throw new Error("MCP_API_KEY is not configured");
-  }
-  return key;
-}
 
 function getOpenAiKey(): string {
   const key = process.env.OPENAI_API_KEY;
@@ -77,11 +66,10 @@ export async function POST(req: NextRequest) {
       const client = new MultiServerMCPClient({
         mcpServers: {
           "semantic-bi": {
-            url: getMcpUrl(),
+            url: resolveChatMcpUrl(),
             transport: "http",
-            headers: {
-              Authorization: `Bearer ${getMcpApiKey()}`,
-            },
+            headers: getMcpAuthHeaders(),
+            automaticSSEFallback: false,
           },
         },
       });

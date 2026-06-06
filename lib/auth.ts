@@ -1,7 +1,8 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
 function getExpectedApiKey(): string | undefined {
-  return process.env.MCP_API_KEY;
+  const key = process.env.MCP_API_KEY?.trim();
+  return key || undefined;
 }
 
 /**

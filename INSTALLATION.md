@@ -188,6 +188,15 @@ Add the `Authorization: Bearer <MCP_API_KEY>` header. The key must match exactly
 ### Agent can't reach MCP server
 Ensure `MCP_URL` points to a running server. For local dev, start `npm run dev` first. The agent connects over HTTP — it does not import tools in-process.
 
+### Chat returns `No authorization provided` on Vercel
+This usually means the `Authorization` header was stripped before reaching `/api/mcp`.
+
+1. Set `MCP_URL` to **`https://`** (not `http://`) with **no trailing slash**, e.g. `https://your-domain.com/api/mcp`
+2. Ensure `MCP_API_KEY` is set for the **Production** environment in Vercel
+3. **Redeploy** after changing environment variables
+
+On Vercel, the chat agent automatically uses the deployment's internal HTTPS URL (`VERCEL_URL`) when `MCP_URL` points to the same app, avoiding `http→https` redirects that drop Bearer tokens.
+
 ### sql.js WASM not found on Vercel
 The app resolves WASM from `node_modules/sql.js/dist/sql-wasm.wasm`. `next.config.ts` marks `sql.js` as a server external package. If issues persist, verify the file exists in your deployment bundle.
 
